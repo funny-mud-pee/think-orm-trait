@@ -1,6 +1,6 @@
 <?php
 
-namespace funnymudpee;
+namespace funnymudpee\thinkphp;
 
 use think\Collection;
 use think\db\exception\DbException;
@@ -9,7 +9,7 @@ use think\Model;
 
 /**
  * Trait ModelTrait
- * @package funnymudpee
+ * @package funnymudpee\thinkphp
  */
 trait ModelTrait
 {

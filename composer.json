@@ -19,7 +19,7 @@
   },
   "autoload": {
     "psr-4": {
-      "funnymudpee\\": "src"
+      "funnymudpee\\thinkphp\\": "src"
     },
     "files": []
   }
