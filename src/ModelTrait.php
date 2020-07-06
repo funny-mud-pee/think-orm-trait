@@ -23,7 +23,6 @@ trait ModelTrait
     public static function getCount(array $aLocator = [], array $aJoin = [], string $group = '')
     {
         $query = self::setComplexQuery($aLocator, [], $aJoin, [], $group);
-        Db::trigger('before_select', $query);
         return $query->count();
     }
 
@@ -493,9 +492,6 @@ trait ModelTrait
             $aConf['list_rows'] = $submitListRows;
         }
         $query = self::setComplexQuery($where, $field, $join, $sort, $group);
-        // 为何要再触发一次
-        // 分页中有统计count()调用,而count中并不像find或select自动触发了数据库事件
-        Db::trigger('before_select', $query);
         // query
         $oPaginate = $query->paginate($aConf);
         return [
