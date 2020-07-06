@@ -1,0 +1,26 @@
+{
+  "name": "funny-mud-pee/think-orm-model-trait",
+  "type": "library",
+  "description": "think orm trait",
+  "keywords": [
+    "orm",
+    "database"
+  ],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "funny mud pee",
+      "email": "public@goforhistory.com"
+    }
+  ],
+  "require": {
+    "php": ">=7.1.0",
+    "topthink/think-orm": ">=2.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "funnymudpee\\": "src"
+    },
+    "files": []
+  }
+}
