@@ -5,12 +5,11 @@ namespace funnymudpee;
 use think\Collection;
 use think\db\exception\DbException;
 use think\db\Query;
-use think\facade\Db;
 use think\Model;
 
 /**
  * Trait ModelTrait
- * @package oaa\traits
+ * @package funnymudpee
  */
 trait ModelTrait
 {
@@ -96,7 +95,7 @@ trait ModelTrait
         }
         if (!empty($whereOrGroup)) {
             foreach ($whereOrGroup as $whereOr) {
-                $query->where(function ($query) use ($whereOr) {
+                $query->where(function (Query $query) use ($whereOr) {
                     $query->whereOr($whereOr);
                 });
             }
@@ -213,15 +212,6 @@ trait ModelTrait
         if (!empty($where)) {
             array_push($whereGroup, $where);
         }
-    }
-
-    /**
-     * 获取当前模型主键
-     * @return mixed
-     */
-    public static function getPrimaryKey()
-    {
-        return (new static())->getPk();
     }
 
     /**
@@ -377,6 +367,15 @@ trait ModelTrait
         }
         $query = self::setComplexQuery($aLocator, $aField, $aJoin);
         return $query->findOrEmpty();
+    }
+
+    /**
+     * 获取当前模型主键
+     * @return mixed
+     */
+    public static function getPrimaryKey()
+    {
+        return (new static())->getPk();
     }
 
     /**
