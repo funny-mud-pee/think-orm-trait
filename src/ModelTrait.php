@@ -83,19 +83,25 @@ trait ModelTrait
             // alias
             $alias = $query->getOptions('alias');
             $table = $query->getTable();
-            $alias = isset($alias[$table]) ? $alias[$table] . '.' : '';
-            self::mainModelConditionWithAlias($whereGroup, $alias);
-            $whereGroup = empty($whereGroup) ? true : $whereGroup;
-            self::mainModelConditionWithAlias($whereOrGroup, $alias);
-            $query->where($whereGroup);
+            $alias = isset($alias[$table]) ? $alias[$table] : '';
         } else {
-            $whereGroup = empty($whereGroup) ? true : $whereGroup;
-            $query = static::where($whereGroup);
-            $alias = '';
+            $query = static::newQuery();
         }
+        if (empty($alias) && !empty($aJoin)) {
+            $alias = $query->getTable();
+            $query->alias($query->getTable());
+        }
+        if (!empty($alias)) {
+            self::mainModelConditionWithAlias($whereGroup, $alias);
+            self::mainModelConditionWithAlias($whereOrGroup, $alias);
+            self::fieldWithAlias($aField, $alias);
+        }
+        $whereGroup = empty($whereGroup) ? true : $whereGroup;
+        $query->where($whereGroup);
+        // where or
         if (!empty($whereOrGroup)) {
             foreach ($whereOrGroup as $whereOr) {
-                $query->where(function (Query $query) use ($whereOr) {
+                $query->where(function ($query) use ($whereOr) {
                     $query->whereOr($whereOr);
                 });
             }
@@ -120,21 +126,28 @@ trait ModelTrait
         // [['模型类','别名'],['模型关联键名'=>'当前模型关联键名/自定义表达式'],'LEFT|INNER|RIGHT']
         foreach ($aJoin as $aItem) {
             // join table
-            $aJoinModelInfo = $aItem[0];
-            /** @var Model $oJoinModel */
-            $oJoinModel = new $aJoinModelInfo[0];
-            if (!empty($aJoinModelInfo[1])) {
-                $join = [$oJoinModel->getTable() => $aJoinModelInfo[1]];
+            if (is_array($aItem[0])) {
+                $aJoinModelInfo = $aItem[0];
+                /** @var Model $oJoinModel */
+                $oJoinModel = new $aJoinModelInfo[0];
+                if (!empty($aJoinModelInfo[1])) {
+                    $joinName = $aJoinModelInfo[1];
+                    $join = [$oJoinModel->getTable() => $aJoinModelInfo[1]];
+                } else {
+                    $join = $joinName = $oJoinModel->getTable();
+                }
             } else {
-                $join = $oJoinModel->getTable();
+                /** @var Model $oJoinModel */
+                $oJoinModel = new $aItem[0];
+                $join = $joinName = $oJoinModel->getTable();
             }
             // condition
             $condition = '';
             foreach ($aItem[1] as $localKey => $foreignKey) {
                 if (is_string($foreignKey) && !is_numeric($foreignKey) && false === strpos($foreignKey, '.')) {
-                    $foreignKey = $alias ? $alias . $foreignKey : $foreignKey;
+                    $foreignKey = self::concatenateAlias($foreignKey, $alias);
                 }
-                $condition .= $localKey . ' = ' . $foreignKey . ' AND ';
+                $condition .= self::concatenateAlias($localKey, $joinName) . ' = ' . $foreignKey . ' AND ';
             }
             $condition = trim($condition, ' AND ');
             // join type
@@ -255,10 +268,16 @@ trait ModelTrait
         $aVisible = self::extractVisible($aField);
         $aHidden = self::extractHidden($aField);
         $aJoin = $config['join'] ?? [];
+        $aBind = $config['bind'] ?? [];
         $aWith = self::extractWith($aJoin);
-        return function (Query $query) use ($aField, $aWith, $aAppend, $aVisible, $aHidden) {
+        return function ($query) use ($aField, $aBind, $aWith, $aAppend, $aVisible, $aHidden) {
             $aField = empty($aField) ? true : $aField;
-            $query->field($aField)->with($aWith)->append($aAppend)->visible($aVisible)->hidden($aHidden);
+            $query->field($aField)
+                ->with($aWith)
+                ->append($aAppend)
+                ->visible($aVisible)
+                ->hidden($aHidden)
+                ->bind($aBind);
         };
     }
 
@@ -318,11 +337,40 @@ trait ModelTrait
             if (is_array($item[0])) {
                 self::mainModelConditionWithAlias($item, $alias);
             } else {
-                if (false === strpos($item[0], '.')) {
-                    $item[0] = $alias . $item[0];
-                }
+                $item[0] = self::concatenateAlias($item[0], $alias);
             }
         }
+    }
+
+    /**
+     * 整理为TP ORM支持的数组where条件
+     * @param array $fields
+     * @param string $alias
+     */
+    private static function fieldWithAlias(array &$fields, string $alias)
+    {
+        if (empty($fields) || empty($alias)) {
+            return;
+        }
+        $result = [];
+        foreach ($fields as $i => $field) {
+            if (is_string($i)) {
+                $fieldAlias = $field;
+                $field = $i;
+                $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
+            } else {
+                $result[$i] = self::concatenateAlias($field, $alias);
+            }
+        }
+        $fields = $result;
+    }
+
+    private static function concatenateAlias(string $field, ?string $alias)
+    {
+        if (!empty($alias) && false === strpos($field, '.')) {
+            $field = $alias . '.' . $field;
+        }
+        return $field;
     }
 
     /**
@@ -512,7 +560,7 @@ trait ModelTrait
         if (empty($whereGroup)) {
             throw new DbException('删除条件不能为空');
         }
-        return self::destroy(function (Query $query) use ($whereGroup) {
+        return self::destroy(function ($query) use ($whereGroup) {
             $query->where($whereGroup);
         });
     }
@@ -534,7 +582,7 @@ trait ModelTrait
         if (empty($whereGroup)) {
             throw new DbException('删除条件不能为空');
         }
-        return self::destroy(function (Query $query) use ($whereGroup) {
+        return self::destroy(function ($query) use ($whereGroup) {
             $query->where($whereGroup);
         });
     }
@@ -546,7 +594,7 @@ trait ModelTrait
      */
     public static function deleteById(int $id)
     {
-        return self::destroy(function (Query $query) use ($id) {
+        return self::destroy(function ($query) use ($id) {
             $model = $query->getModel();
             $pk = $model->getPrimaryKey();
             $query->where($pk, '=', $id);
@@ -559,7 +607,7 @@ trait ModelTrait
      */
     public static function clear()
     {
-        return self::destroy(function (Query $query) {
+        return self::destroy(function ($query) {
             $query->where(true);
         });
     }
