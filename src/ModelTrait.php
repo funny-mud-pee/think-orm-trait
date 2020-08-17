@@ -153,6 +153,12 @@ trait ModelTrait
             // join type
             $joinType = $aItem[2] ?? 'INNER';
             $query->join($join, $condition, $joinType);
+            // join model fields
+            $aGetJoinFields = $aItem[3]??[];
+            if(!empty($aGetJoinFields)){
+                self::fieldWithAlias($aGetJoinFields,$joinName);
+                $aField = array_merge($aField,$aGetJoinFields);
+            }
         }
         $query->field($aField)->order($aSort)->with($with)->append($append)->visible($visible)->hidden($hidden);
         return $query;
