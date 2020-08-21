@@ -537,8 +537,6 @@ trait ModelTrait
      */
     public static function getPage(array $where = [], array $field = [], array $join = [], array $sort = [], int $listRows = 0, string $group = '')
     {
-        // 分页配置
-        $aConf = config('paginate');
         if ($listRows) {
             $aConf['list_rows'] = $listRows;
         } elseif ($submitListRows = request()->param('list_rows', 0, 'intval')) {
@@ -546,7 +544,7 @@ trait ModelTrait
         }
         $query = self::setComplexQuery($where, $field, $join, $sort, $group);
         // query
-        $oPaginate = $query->paginate($aConf);
+        $oPaginate = $query->paginate($listRows);
         return [
             'list' => $oPaginate->items(),
             'total_pages' => $oPaginate->lastPage(),
