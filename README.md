@@ -5,6 +5,7 @@
 ## ModelTrait.php - 快捷查询
 
 ### 公共查询约定setComplexQuery
+
 ````php
 public static function setComplexQuery(array $aLocator = [], array $aField = [], array $aJoin = [], array $aSort = [], string $group = '')
 {
@@ -17,6 +18,7 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
 ##### $aLocator - 查询条件
 
 - AND查询
+
     ````php
     array(
         'id' => ['IN',[1,2,6,8]],
@@ -26,6 +28,7 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
     ````
 
 - OR查询
+
     ````php
     array(
         '{logic}' => 'OR',
@@ -40,6 +43,7 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
     ````
 
 - 每个数组的配置，你将其看作一个分组，类似sql条件中()。所以你可以根据实际情况，设置多个分组，完成复杂的查询
+
     ````php
     $aLocator = [
         [
@@ -88,40 +92,41 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
 #### $aJoin - 关联设置
 
 - 关联表查询
-````php
-$aLocator = [
-    'sex' => 'male',
-    'create_time' => ['>', '2019-11-11 11:11:11'],
-    'status' => 'active',
-    'account.balance' => ['>=', 50000],
-];
-$aField = ['id', 'name', 'sex'];
-$aJoin = [
-    [
-        // 关联表的模型类名称
-        UserDetailModel::class,
-        // 关联条件
-        // 左侧是当前表的字段（即UserDetailModel），右侧是需要关联表中的字段
-        // 如果右侧为主模型字段（即UserModel），则可以省略别名
-        ['user_id' => 'id'],
-        // 关联方式默认为inner，可选'LEFT|INNER|RIGHT'
-        'LEFT',
-    ],
-    [
-        // 有时候我们需要在$aLocator填写关联表某些字段为约束条件，则需要用到别名，避免字段冲突的问题
-        // ['关联表的模型类名称','别名']
-        [AccountModel::class, 'account'],
-        ['user_id' => 'id'],
-        // 关联方式默认为inner，可选'LEFT|INNER|RIGHT'
-        'LEFT',
-        // 查询字段
-        ['balance']
-    ]
-];
-$users = UserModel::getList($aLocator, $aField, $aJoin);
-// 生成的sql如下：
-// SELECT `user`.`id`,`user`.`name`,`user`.`sex`,`account`.`balance` FROM `user` `user` LEFT JOIN `user_detail` ON `user_detail`.`user_id`=`user`.`id` LEFT JOIN `account` `account` ON `account`.`user_id`=`user`.`id` WHERE  ( `user`.`sex` = 'male' AND `user`.`create_time` > '2019-11-11 11:11:11' AND `user`.`status` = 'active' AND `account`.`balance` >= 50000 )
-````
+
+    ````php
+    $aLocator = [
+        'sex' => 'male',
+        'create_time' => ['>', '2019-11-11 11:11:11'],
+        'status' => 'active',
+        'account.balance' => ['>=', 50000],
+    ];
+    $aField = ['id', 'name', 'sex'];
+    $aJoin = [
+        [
+            // 关联表的模型类名称
+            UserDetailModel::class,
+            // 关联条件
+            // 左侧是当前表的字段（即UserDetailModel），右侧是需要关联表中的字段
+            // 如果右侧为主模型字段（即UserModel），则可以省略别名
+            ['user_id' => 'id'],
+            // 关联方式默认为inner，可选'LEFT|INNER|RIGHT'
+            'LEFT',
+        ],
+        [
+            // 有时候我们需要在$aLocator填写关联表某些字段为约束条件，则需要用到别名，避免字段冲突的问题
+            // ['关联表的模型类名称','别名']
+            [AccountModel::class, 'account'],
+            ['user_id' => 'id'],
+            // 关联方式默认为inner，可选'LEFT|INNER|RIGHT'
+            'LEFT',
+            // 查询字段
+            ['balance']
+        ]
+    ];
+    $users = UserModel::getList($aLocator, $aField, $aJoin);
+    // 生成的sql如下：
+    // SELECT `user`.`id`,`user`.`name`,`user`.`sex`,`account`.`balance` FROM `user` `user` LEFT JOIN `user_detail` ON `user_detail`.`user_id`=`user`.`id` LEFT JOIN `account` `account` ON `account`.`user_id`=`user`.`id` WHERE  ( `user`.`sex` = 'male' AND `user`.`create_time` > '2019-11-11 11:11:11' AND `user`.`status` = 'active' AND `account`.`balance` >= 50000 )
+    ````
 
 - 关联模型查询
 
