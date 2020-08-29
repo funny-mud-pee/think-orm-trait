@@ -90,8 +90,18 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
     // SELECT `UserModel`.* FROM `user` `UserModel` INNER JOIN `account` `AccountModel` ON `UserModel`.`id`=`AccountModel`.`user_id` WHERE  `AccountModel`.`status` = 'active'  AND ( `UserModel`.`sex` = 'male' AND `UserModel`.`create_time` > '2019-11-11 11:11:11' AND `UserModel`.`status` = 'active' )
     ````
 
-##### $aField - 查询字段
+#### $aField - 查询字段
 查询字段没有什么好赘述的，仅支持主模型的字段。如果想要查询关联模型或关联表字段可以在形参$aJoin中设置
+
+````php
+<?php
+// think orm中的一些配置转换
+$aField = [
+    '{visible}' => ['需要显示的字段'],
+    '{hidden}' => ['需要隐藏的字段'],
+    '{append}' => ['描述字段'],
+];
+````
 
 #### $aJoin - 关联设置
 
