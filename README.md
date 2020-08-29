@@ -9,7 +9,7 @@
 ````php
 public static function setComplexQuery(array $aLocator = [], array $aField = [], array $aJoin = [], array $aSort = [], string $group = '')
 {
-    ......
+    //......
 }
 ````
 
@@ -20,16 +20,18 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
 - AND查询
 
     ````php
+  <?php
     array(
         'id' => ['IN',[1,2,6,8]],
         'sex' => 'male',
         'create_time' => ['>','2019-11-11 11:11:11'],
-    )
+    );
     ````
 
 - OR查询
 
     ````php
+  <?php
     array(
         '{logic}' => 'OR',
         array(
@@ -39,12 +41,13 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
             'name' => ['LIKE','%抠脚%'],
             'status' => 'active',
          ),
-    )
+    );
     ````
 
 - 每个数组的配置，你将其看作一个分组，类似sql条件中()。所以你可以根据实际情况，设置多个分组，完成复杂的查询
 
     ````php
+  <?php
     $aLocator = [
         [
             'sex' => 'male',
@@ -73,6 +76,7 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
     进阶格式：'{has}' => array('关联方法名a' => array(查询条件),'关联方法名b' => array(查询条件))
     
     ````php
+  <?php
     $aLocator = [
         'sex' => 'male',
         'create_time' => ['>', '2019-11-11 11:11:11'],
@@ -94,6 +98,7 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
 - 关联表查询
 
     ````php
+  <?php
     $aLocator = [
         'sex' => 'male',
         'create_time' => ['>', '2019-11-11 11:11:11'],
@@ -162,6 +167,7 @@ public static function setComplexQuery(array $aLocator = [], array $aField = [],
     通过模型配置关联，简化写法，我个人比较喜欢这种写法：
     
     ````php
+  <?php
     $aLocator = [
         'sex' => 'male',
         'create_time' => ['>', '2019-11-11 11:11:11'],
