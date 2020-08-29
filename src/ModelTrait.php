@@ -9,6 +9,7 @@ use think\Model;
 
 /**
  * Trait ModelTrait
+ * @mixin Query
  * @package funnymudpee\thinkphp
  */
 trait ModelTrait
@@ -123,7 +124,7 @@ trait ModelTrait
             $query->group($alias . $group);
         }
         // join
-        // [['模型类','别名'],['模型关联键名'=>'当前模型关联键名/自定义表达式'],'LEFT|INNER|RIGHT']
+        // [['模型类','别名'],['关联键名'=>'外键'],'LEFT|INNER|RIGHT',['查询字段']]
         foreach ($aJoin as $aItem) {
             // join table
             if (is_array($aItem[0])) {
@@ -154,10 +155,10 @@ trait ModelTrait
             $joinType = $aItem[2] ?? 'INNER';
             $query->join($join, $condition, $joinType);
             // join model fields
-            $aGetJoinFields = $aItem[3]??[];
-            if(!empty($aGetJoinFields)){
-                self::fieldWithAlias($aGetJoinFields,$joinName);
-                $aField = array_merge($aField,$aGetJoinFields);
+            $aGetJoinFields = $aItem[3] ?? [];
+            if (!empty($aGetJoinFields)) {
+                self::fieldWithAlias($aGetJoinFields, $joinName);
+                $aField = array_merge($aField, $aGetJoinFields);
             }
         }
         $query->field($aField)->order($aSort)->with($with)->append($append)->visible($visible)->hidden($hidden);
@@ -176,15 +177,16 @@ trait ModelTrait
         if (empty($aLocator)) {
             return;
         }
+        self::parseWhereItemWithStringKey($aLocator);
         $where = [];
         foreach ($aLocator as $key => $value) {
             if (is_numeric($key)) {
                 if (!is_array($value)) {
                     continue;
                 }
-                if (isset($value['__LOGIC__'])) {
-                    $logic = $value['__LOGIC__'];
-                    unset($value['__LOGIC__']);
+                $logic = $value['{logic}'] ?? null;
+                if (!is_null($logic)) {
+                    unset($value['{logic}']);
                     $subWhereGroup = [];
                     foreach ($value as $aSubLocator) {
                         self::optimizeCondition($aSubLocator, $subWhereGroup);
@@ -198,9 +200,10 @@ trait ModelTrait
                         }
                     }
                 } else {
+                    self::parseWhereItemWithStringKey($value);
                     array_push($where, $value);
                 }
-            } elseif (false !== strpos($key, '{has}.')) {
+            } elseif (self::isHasWhereKey($key)) {
                 list($identify, $relation) = explode('.', $key);
                 $hasWhere = [];
                 self::optimizeCondition($value, $hasWhere);
@@ -208,29 +211,55 @@ trait ModelTrait
                     $hasWhere = reset($hasWhere);
                 }
                 array_push($hasWhereGroup, ['relation' => $relation, 'where' => $hasWhere]);
-            } elseif (is_string($key)) {
-                if (is_array($value)) {
-                    if (is_array($value[0])) {
-                        foreach ($value as $item) {
-                            array_unshift($item, $key);
-                            array_push($where, $item);
-                        }
-                    } else {
-                        array_unshift($value, $key);
-                        array_push($where, $value);
-                    }
-                } else {
-                    array_push($where, [$key, '=', $value]);
-                }
             }
         }
-
         if (count($where) === 1) {
             $where = reset($where);
         }
         if (!empty($where)) {
             array_push($whereGroup, $where);
         }
+    }
+
+    private static function parseWhereItemWithStringKey(array &$aLocator)
+    {
+        foreach ($aLocator as $key => $value) {
+            if (!is_string($key) || self::isLogicKey($key) || self::isHasWhereKey($key)) {
+                continue;
+            }
+            if (is_array($value)) {
+                if (is_array($value[0])) {
+                    $whereGroup = [];
+                    foreach ($value as $item) {
+                        array_unshift($item, $key);
+                        array_push($whereGroup, $item);
+                    }
+                    array_push($aLocator, $whereGroup);
+                } else {
+                    array_unshift($value, $key);
+                    array_push($aLocator, $value);
+                }
+            } else {
+                array_push($aLocator, [$key, '=', $value]);
+            }
+            unset($aLocator[$key]);
+        }
+    }
+
+    private static function isLogicKey(string $key)
+    {
+        if ('{logic}' === $key) {
+            return true;
+        }
+        return false;
+    }
+
+    private static function isHasWhereKey(string $key)
+    {
+        if ('{has}' === $key || false !== strpos($key, '{has}.')) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -348,6 +377,14 @@ trait ModelTrait
         }
     }
 
+    private static function concatenateAlias(string $field, ?string $alias)
+    {
+        if (!empty($alias) && false === strpos($field, '.')) {
+            $field = $alias . '.' . $field;
+        }
+        return $field;
+    }
+
     /**
      * 整理为TP ORM支持的数组where条件
      * @param array $fields
@@ -369,14 +406,6 @@ trait ModelTrait
             }
         }
         $fields = $result;
-    }
-
-    private static function concatenateAlias(string $field, ?string $alias)
-    {
-        if (!empty($alias) && false === strpos($field, '.')) {
-            $field = $alias . '.' . $field;
-        }
-        return $field;
     }
 
     /**
@@ -467,7 +496,7 @@ trait ModelTrait
      * 更新数据
      * @param array $aUpdateData
      * @param array $aLocator
-     * @return Model
+     * @return static
      */
     public static function updateByLocator(array $aUpdateData, array $aLocator)
     {
