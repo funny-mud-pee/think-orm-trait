@@ -5,6 +5,8 @@ namespace funnymudpee\thinkphp;
 use think\Collection;
 use think\db\exception\DbException;
 use think\db\Query;
+use think\db\Raw;
+use think\facade\Db;
 use think\Model;
 
 /**
@@ -23,7 +25,24 @@ trait ModelTrait
     public static function getCount(array $aLocator = [], array $aJoin = [], string $group = '')
     {
         $query = self::setComplexQuery($aLocator, [], $aJoin, [], $group);
+        // 为何要再触发一次
+        // count中并不像find或select自动触发了数据库事件
+        Db::trigger('before_select', $query);
         return $query->count();
+    }
+
+    /**
+     * @param string|Raw $field
+     * @param array $aLocator
+     * @param array $aJoin
+     * @param string $group
+     * @return float
+     */
+    public static function getSum($field, array $aLocator = [], array $aJoin = [], string $group = '')
+    {
+        $query = self::setComplexQuery($aLocator, [], $aJoin, [], $group);
+        Db::trigger('before_select', $query);
+        return $query->sum($field);
     }
 
     /**
@@ -80,6 +99,7 @@ trait ModelTrait
             }
         }
         // where
+        $alias = '';
         if ($query) {
             // alias
             $alias = $query->getOptions('alias');
@@ -92,11 +112,10 @@ trait ModelTrait
             $alias = $query->getTable();
             $query->alias($query->getTable());
         }
-        if (!empty($alias)) {
-            self::mainModelConditionWithAlias($whereGroup, $alias);
-            self::mainModelConditionWithAlias($whereOrGroup, $alias);
-            self::fieldWithAlias($aField, $alias);
-        }
+        // concatenate alias
+        self::mainModelConditionWithAlias($whereGroup, $alias);
+        self::mainModelConditionWithAlias($whereOrGroup, $alias);
+        self::fieldWithAlias($aField, $alias);
         $whereGroup = empty($whereGroup) ? true : $whereGroup;
         $query->where($whereGroup);
         // where or
@@ -111,17 +130,13 @@ trait ModelTrait
         if (!empty($aSort)) {
             $aNewSort = [];
             foreach ($aSort as $sortField => $sortValue) {
-                if (false === strpos($sortField, '.') && $alias) {
-                    $aNewSort[$alias . $sortField] = $sortValue;
-                } else {
-                    $aNewSort[$sortField] = $sortValue;
-                }
+                $aNewSort[self::concatenateAlias($sortField, $alias)] = $sortValue;
             }
             $aSort = $aNewSort;
         }
         // group
         if (!empty($group)) {
-            $query->group($alias . $group);
+            $query->group(self::concatenateAlias($group, $alias));
         }
         // join
         // [['模型类','别名'],['关联键名'=>'外键'],'LEFT|INNER|RIGHT',['查询字段']]
@@ -572,6 +587,9 @@ trait ModelTrait
             $aConf['list_rows'] = $submitListRows;
         }
         $query = self::setComplexQuery($where, $field, $join, $sort, $group);
+        // 为何要再触发一次
+        // 分页中有统计count()调用,而count中并不像find或select自动触发了数据库事件
+        Db::trigger('before_select', $query);
         // query
         $oPaginate = $query->paginate($listRows);
         return [

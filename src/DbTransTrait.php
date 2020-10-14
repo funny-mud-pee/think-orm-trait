@@ -7,12 +7,6 @@ use think\facade\Db;
 /**
  * tp orm mysql支持事务嵌套，尽管套就好，不用过多处理
  * Trait DbTransTrait
- * @package oaa\traits
- */
-
-/**
- * tp orm mysql支持事务嵌套，尽管套就好，不用过多处理
- * Trait DbTransTrait
  * @package funnymudpee\thinkphp
  */
 trait DbTransTrait
