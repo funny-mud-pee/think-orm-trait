@@ -61,6 +61,9 @@ trait ModelTrait
             $withTrashed = boolval($aLocator['{withTrashed}']);
             unset($aLocator['{withTrashed}']);
         }
+        if(empty($aField)){
+            $aField = static::getTableFields();
+        }
         $whereGroup = [];
         $hasWhereGroup = [];
         $whereOrGroup = [];
