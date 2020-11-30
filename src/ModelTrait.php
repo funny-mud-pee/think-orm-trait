@@ -8,10 +8,12 @@ use think\db\Query;
 use think\db\Raw;
 use think\facade\Db;
 use think\Model;
+use think\model\concern\SoftDelete;
 
 /**
  * Trait ModelTrait
  * @mixin Query
+ * @mixin SoftDelete
  * @package funnymudpee\thinkphp
  */
 trait ModelTrait
@@ -56,12 +58,14 @@ trait ModelTrait
      */
     public static function setComplexQuery(array $aLocator = [], array $aField = [], array $aJoin = [], array $aSort = [], string $group = '')
     {
+        // 软删除查询
         $withTrashed = false;
         if (isset($aLocator['{withTrashed}'])) {
             $withTrashed = boolval($aLocator['{withTrashed}']);
             unset($aLocator['{withTrashed}']);
         }
-        if(empty($aField)){
+        // 字段查询
+        if (empty($aField)) {
             $aField = static::getTableFields();
         }
         $whereGroup = [];
@@ -75,8 +79,8 @@ trait ModelTrait
         // start
         /** @var Query $query */
         $query = null;
-        // with trashed
-        if ($withTrashed) {
+        // 软删除查询
+        if ($withTrashed && property_exists(static::class, 'withTrashed')) {
             $query = static::withTrashed();
         }
         // has where
@@ -109,7 +113,7 @@ trait ModelTrait
             $table = $query->getTable();
             $alias = isset($alias[$table]) ? $alias[$table] : '';
         } else {
-            $query = static::newQuery();
+            $query = (new static())->db();
         }
         if (empty($alias) && !empty($aJoin)) {
             $alias = $query->getTable();
