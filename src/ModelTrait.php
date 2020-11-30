@@ -598,7 +598,7 @@ trait ModelTrait
         // 分页中有统计count()调用,而count中并不像find或select自动触发了数据库事件
         Db::trigger('before_select', $query);
         // query
-        $oPaginate = $query->paginate($listRows);
+        $oPaginate = $query->paginate($aConf);
         return [
             'list' => $oPaginate->items(),
             'total_pages' => $oPaginate->lastPage(),
