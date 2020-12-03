@@ -588,6 +588,7 @@ trait ModelTrait
      */
     public static function getPage(array $where = [], array $field = [], array $join = [], array $sort = [], int $listRows = 0, string $group = '')
     {
+        $aConf = null;
         if ($listRows) {
             $aConf['list_rows'] = $listRows;
         } elseif ($submitListRows = request()->param('list_rows', 0, 'intval')) {
