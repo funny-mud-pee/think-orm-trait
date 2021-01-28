@@ -6,7 +6,6 @@ use think\Collection;
 use think\db\exception\DbException;
 use think\db\Query;
 use think\db\Raw;
-use think\facade\Db;
 use think\Model;
 use think\model\concern\SoftDelete;
 
@@ -27,9 +26,6 @@ trait ModelTrait
     public static function getCount(array $aLocator = [], array $aJoin = [], string $group = '')
     {
         $query = self::setComplexQuery($aLocator, [], $aJoin, [], $group);
-        // 为何要再触发一次
-        // count中并不像find或select自动触发了数据库事件
-        Db::trigger('before_select', $query);
         return $query->count();
     }
 
@@ -43,7 +39,6 @@ trait ModelTrait
     public static function getSum($field, array $aLocator = [], array $aJoin = [], string $group = '')
     {
         $query = self::setComplexQuery($aLocator, [], $aJoin, [], $group);
-        Db::trigger('before_select', $query);
         return $query->sum($field);
     }
 
@@ -64,6 +59,12 @@ trait ModelTrait
             $withTrashed = boolval($aLocator['{withTrashed}']);
             unset($aLocator['{withTrashed}']);
         }
+        // 查询范围
+        $withoutGlobalScope = null;
+        if (isset($aLocator['{withoutGlobalScope}'])) {
+            $withoutGlobalScope = $aLocator['{withoutGlobalScope}'];
+            unset($aLocator['{withoutGlobalScope}']);
+        }
         // 字段查询
         if (empty($aField)) {
             $aField = static::getTableFields();
@@ -73,6 +74,7 @@ trait ModelTrait
         $whereOrGroup = [];
         self::optimizeCondition($aLocator, $whereGroup, $hasWhereGroup, $whereOrGroup);
         $with = self::extractWith($aJoin);
+        $withCount = self::extractWithCount($aJoin);
         $append = self::extractAppend($aField);
         $visible = self::extractVisible($aField);
         $hidden = self::extractHidden($aField);
@@ -81,7 +83,11 @@ trait ModelTrait
         $query = null;
         // 软删除查询
         if ($withTrashed && property_exists(static::class, 'withTrashed')) {
-            $query = static::withTrashed();
+            static::withTrashedData(true);
+        }
+        // 全局作用域的处理
+        if (!is_null($withoutGlobalScope) && is_array($withoutGlobalScope)) {
+            $query = static::withoutGlobalScope($withoutGlobalScope);
         }
         // has where
         if ($hasWhereGroup) {
@@ -183,7 +189,7 @@ trait ModelTrait
                 $aField = array_merge($aField, $aGetJoinFields);
             }
         }
-        $query->field($aField)->order($aSort)->with($with)->append($append)->visible($visible)->hidden($hidden);
+        $query->field($aField)->order($aSort)->with($with)->withCount($withCount)->append($append)->visible($visible)->hidden($hidden);
         return $query;
     }
 
@@ -336,6 +342,13 @@ trait ModelTrait
                 ->hidden($aHidden)
                 ->bind($aBind);
         };
+    }
+
+    private static function extractWithCount(array &$aJoin)
+    {
+        $data = $aJoin['{withCount}'] ?? [];
+        unset($aJoin['{withCount}']);
+        return $data;
     }
 
     /**
@@ -533,12 +546,12 @@ trait ModelTrait
      * @param bool $replace
      * @return mixed
      */
-    public static function setAll(array $aDataList, bool $replace = true)
+    public static function setAll(iterable $dataSet, bool $replace = true)
     {
-        if (empty($aDataList)) {
+        if (empty($dataSet)) {
             return false;
         }
-        return (new static())->saveAll($aDataList, $replace);
+        return (new static())->saveAll($dataSet, $replace);
     }
 
     /**
@@ -595,14 +608,12 @@ trait ModelTrait
             $aConf['list_rows'] = $submitListRows;
         }
         $query = self::setComplexQuery($where, $field, $join, $sort, $group);
-        // 为何要再触发一次
-        // 分页中有统计count()调用,而count中并不像find或select自动触发了数据库事件
-        Db::trigger('before_select', $query);
         // query
         $oPaginate = $query->paginate($aConf);
+        $result = $oPaginate->toArray();
         return [
-            'list' => $oPaginate->items(),
-            'total_pages' => $oPaginate->lastPage(),
+            'list' => $result['data'],
+            'total_pages' => $result['last_page'],
         ];
     }
 
