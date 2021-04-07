@@ -51,7 +51,7 @@ trait ModelTrait
      * @param string $group
      * @return Query
      */
-    public static function setComplexQuery(array $aLocator = [], array $aField = [], array $aJoin = [], array $aSort = [], string $group = '')
+    public static function setComplexQuery(array $aLocator = [], ?array $aField = [], array $aJoin = [], array $aSort = [], string $group = '')
     {
         // 软删除查询
         $withTrashed = false;
@@ -66,7 +66,9 @@ trait ModelTrait
             unset($aLocator['{withoutGlobalScope}']);
         }
         // 字段查询
-        if (empty($aField)) {
+        if (is_null($aField)) {
+            $aField = [];
+        } elseif (empty($aField)) {
             $aField = static::getTableFields();
         }
         $whereGroup = [];
@@ -582,7 +584,7 @@ trait ModelTrait
      * @return Collection
      * @throws DbException
      */
-    public static function getList(array $where = [], array $field = [], array $join = [], array $sort = [], int $limit = 0, string $group = '')
+    public static function getList(array $where = [], ?array $field = [], array $join = [], array $sort = [], int $limit = 0, string $group = '')
     {
         $query = self::setComplexQuery($where, $field, $join, $sort, $group);
         return $query->limit($limit)->select();
@@ -599,7 +601,7 @@ trait ModelTrait
      * @return array
      * @throws DbException
      */
-    public static function getPage(array $where = [], array $field = [], array $join = [], array $sort = [], int $listRows = 0, string $group = '')
+    public static function getPage(array $where = [], ?array $field = [], array $join = [], array $sort = [], int $listRows = 0, string $group = '')
     {
         $aConf = null;
         if ($listRows) {
