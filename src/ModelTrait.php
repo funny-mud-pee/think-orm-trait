@@ -209,38 +209,29 @@ trait ModelTrait
         }
         self::parseWhereItemWithStringKey($aLocator);
         $where = [];
-        foreach ($aLocator as $key => $value) {
-            if (is_numeric($key)) {
-                if (!is_array($value)) {
-                    continue;
-                }
-                $logic = $value['{logic}'] ?? null;
-                if (!is_null($logic)) {
-                    unset($value['{logic}']);
-                    $subWhereGroup = [];
-                    foreach ($value as $aSubLocator) {
-                        self::optimizeCondition($aSubLocator, $subWhereGroup);
+        if (self::existLogicKey($aLocator)) {
+            self::dealAndPushLogic($aLocator, $whereOrGroup);
+        } else {
+            foreach ($aLocator as $key => $value) {
+                if (is_numeric($key)) {
+                    if (!is_array($value)) {
+                        continue;
                     }
-                    if (!empty($subWhereGroup)) {
-                        switch ($logic) {
-                            case 'OR':
-                                //$whereOrGroup = array_merge($whereOrGroup, $subWhereGroup);
-                                array_push($whereOrGroup, $subWhereGroup);
-                                break;
-                        }
+                    if (self::existLogicKey($value)) {
+                        self::dealAndPushLogic($value, $whereOrGroup);
+                    } else {
+                        self::parseWhereItemWithStringKey($value);
+                        array_push($where, $value);
                     }
-                } else {
-                    self::parseWhereItemWithStringKey($value);
-                    array_push($where, $value);
+                } elseif (self::isHasWhereKey($key)) {
+                    list($identify, $relation) = explode('.', $key);
+                    $hasWhere = [];
+                    self::optimizeCondition($value, $hasWhere);
+                    if (1 === count($hasWhere) && isset($hasWhere[0]) && is_array($hasWhere[0][0])) {
+                        $hasWhere = reset($hasWhere);
+                    }
+                    array_push($hasWhereGroup, ['relation' => $relation, 'where' => $hasWhere]);
                 }
-            } elseif (self::isHasWhereKey($key)) {
-                list($identify, $relation) = explode('.', $key);
-                $hasWhere = [];
-                self::optimizeCondition($value, $hasWhere);
-                if (1 === count($hasWhere) && isset($hasWhere[0]) && is_array($hasWhere[0][0])) {
-                    $hasWhere = reset($hasWhere);
-                }
-                array_push($hasWhereGroup, ['relation' => $relation, 'where' => $hasWhere]);
             }
         }
         if (count($where) === 1) {
@@ -251,6 +242,20 @@ trait ModelTrait
         }
     }
 
+    private static function dealAndPushLogic(array $logicGroup, array &$whereOrGroup = [])
+    {
+        $logic = $logicGroup['{logic}'] ?? null;
+        unset($logicGroup['{logic}']);
+        if (!empty($logicGroup)) {
+            switch ($logic) {
+                case 'OR':
+                    //$whereOrGroup = array_merge($whereOrGroup, $subWhereGroup);
+                    array_push($whereOrGroup, $logicGroup);
+                    break;
+            }
+        }
+    }
+
     private static function parseWhereItemWithStringKey(array &$aLocator)
     {
         foreach ($aLocator as $key => $value) {
@@ -258,7 +263,8 @@ trait ModelTrait
                 continue;
             }
             if (is_array($value)) {
-                if (is_array($value[0])) {
+                $firstKey = array_key_first($value);
+                if (is_array($value[$firstKey])) {
                     $whereGroup = [];
                     foreach ($value as $item) {
                         array_unshift($item, $key);
@@ -282,6 +288,11 @@ trait ModelTrait
             return true;
         }
         return false;
+    }
+
+    private static function existLogicKey(array $data)
+    {
+        return array_key_exists('{logic}', $data);
     }
 
     private static function isHasWhereKey(string $key)
@@ -480,7 +491,7 @@ trait ModelTrait
             if (is_string($pk)) {
                 $aLocator[$pk] = $condition;
             } else {
-                throw new DbException('模型包含多个主键：' . implode('、', $pk));
+                throw new DbException('模型包含多个主键:' . implode(',', $pk));
             }
         } else {
             $aLocator = [];
@@ -517,16 +528,21 @@ trait ModelTrait
 
     /**
      * 根据字段获取数据
-     * @param string $field
-     * @param mixed $fieldValue
+     * @param string|array $field
+     * @param string|array $fieldValue
      * @param array $aField
      * @param array $aJoin
      * @return self
      * @throws DbException
      */
-    public static function getByField(string $field, $fieldValue, array $aField = [], array $aJoin = [])
+    public static function getByField($field, $fieldValue, array $aField = [], array $aJoin = [])
     {
-        return self::get([$field => $fieldValue], $aField, $aJoin);
+        if (is_array($field) && is_array($fieldValue)) {
+            $aLocator = array_combine($field, $fieldValue);
+        } else {
+            $aLocator = [$field => $fieldValue];
+        }
+        return self::get($aLocator, $aField, $aJoin);
     }
 
     /**
