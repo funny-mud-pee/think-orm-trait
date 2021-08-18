@@ -24,12 +24,12 @@ trait DbTransTrait
     /**
      * 结束事务
      * @access protected
-     * @param bool $bError [in opt]是否出错，标记出错时事务回滚
+     * @param bool $isWrong [in opt]是否出错，标记出错时事务回滚
      * @return void
      */
-    protected static function endDbTrans(bool $bError = true)
+    protected static function endDbTrans(bool $isWrong = true)
     {
-        if ($bError) {
+        if ($isWrong) {
             Db::rollback();
         } else {
             Db::commit();
