@@ -10,11 +10,11 @@
   "authors": [
     {
       "name": "funny mud pee",
-      "email": "public@goforhistory.com"
+      "email": "2114164829@qq.com"
     }
   ],
   "require": {
-    "php": ">=7.1.0",
+    "php": ">=7.4",
     "topthink/think-orm": "^2.0"
   },
   "autoload": {
