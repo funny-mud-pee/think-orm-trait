@@ -446,9 +446,13 @@ trait ModelTrait
         $result = [];
         foreach ($fields as $i => $field) {
             if (is_string($i)) {
-                $fieldAlias = $field;
-                $field = $i;
-                $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
+                if (0 === strpos($i, 'SUM')) {
+                    $result[$i] = $field;
+                } else {
+                    $fieldAlias = $field;
+                    $field = $i;
+                    $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
+                }
             } else {
                 $result[$i] = self::concatenateAlias($field, $alias);
             }
