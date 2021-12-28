@@ -446,7 +446,7 @@ trait ModelTrait
         $result = [];
         foreach ($fields as $i => $field) {
             if (is_string($i)) {
-                if (0 === strpos($i, 'SUM')) {
+                if (self::isAggregateField($i)) {
                     $result[$i] = $field;
                 } else {
                     $fieldAlias = $field;
@@ -458,6 +458,14 @@ trait ModelTrait
             }
         }
         $fields = $result;
+    }
+
+    private static function isAggregateField(string $field)
+    {
+        if (0 === strpos($field, 'SUM') || 0 === strpos($field, 'COUNT')) {
+            return true;
+        }
+        return false;
     }
 
     /**
