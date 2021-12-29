@@ -447,6 +447,10 @@ trait ModelTrait
         foreach ($fields as $i => $field) {
             if (is_string($i)) {
                 if (self::isAggregateField($i)) {
+                    // SUM('id')
+                    $leftParenthesesPosition = strpos($i, '(');
+                    [$left, $right] = explode('(', $i);
+                    $i = $left . '(' . $alias . '.' . $right;
                     $result[$i] = $field;
                 } else {
                     $fieldAlias = $field;
@@ -592,9 +596,9 @@ trait ModelTrait
      * @return self
      * @throws DbException
      */
-    public static function getOne(array $aLocator = [], array $aField = [], array $aJoin = [], array $aSort = [])
+    public static function getOne(array $aLocator = [], array $aField = [], array $aJoin = [], array $aSort = [], string $group = '')
     {
-        $list = self::getList($aLocator, $aField, $aJoin, $aSort, 1);
+        $list = self::getList($aLocator, $aField, $aJoin, $aSort, 1, $group);
         if ($list->isEmpty()) {
             return $list;
         }
