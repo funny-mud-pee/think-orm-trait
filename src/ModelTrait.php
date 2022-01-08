@@ -428,7 +428,13 @@ trait ModelTrait
     private static function concatenateAlias(string $field, ?string $alias)
     {
         if (!empty($alias) && false === strpos($field, '.')) {
-            $field = $alias . '.' . $field;
+            if (self::isAggregateField($field)) {
+                $leftParenthesesPosition = strpos($field, '(');
+                [$left, $right] = explode('(', $field);
+                $field = $left . '(' . $alias . '.' . $right;
+            } else {
+                $field = $alias . '.' . $field;
+            }
         }
         return $field;
     }
@@ -446,17 +452,20 @@ trait ModelTrait
         $result = [];
         foreach ($fields as $i => $field) {
             if (is_string($i)) {
-                if (self::isAggregateField($i)) {
-                    // SUM('id')
-                    $leftParenthesesPosition = strpos($i, '(');
-                    [$left, $right] = explode('(', $i);
-                    $i = $left . '(' . $alias . '.' . $right;
-                    $result[$i] = $field;
-                } else {
-                    $fieldAlias = $field;
-                    $field = $i;
-                    $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
-                }
+//                if (self::isAggregateField($i)) {
+//                    // SUM('id')
+//                    $leftParenthesesPosition = strpos($i, '(');
+//                    [$left, $right] = explode('(', $i);
+//                    $i = $left . '(' . $alias . '.' . $right;
+//                    $result[$i] = $field;
+//                } else {
+//                    $fieldAlias = $field;
+//                    $field = $i;
+//                    $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
+//                }
+                $fieldAlias = $field;
+                $field = $i;
+                $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
             } else {
                 $result[$i] = self::concatenateAlias($field, $alias);
             }
@@ -466,7 +475,8 @@ trait ModelTrait
 
     private static function isAggregateField(string $field)
     {
-        if (0 === strpos($field, 'SUM') || 0 === strpos($field, 'COUNT')) {
+        $field = strtoupper($field);
+        if (0 === strpos($field, 'SUM') || 0 === strpos($field, 'COUNT') || 0 === strpos($field, 'MIN') || 0 === strpos($field, 'MAX')) {
             return true;
         }
         return false;
