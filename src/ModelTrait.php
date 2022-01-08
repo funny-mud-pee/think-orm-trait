@@ -18,68 +18,80 @@ use think\model\concern\SoftDelete;
 trait ModelTrait
 {
     /**
-     * @param array $aLocator
-     * @param array $aJoin
+     * @param array $locator
+     * @param array $join
      * @param string $group
      * @return int
      */
-    public static function getCount(array $aLocator = [], array $aJoin = [], string $group = '')
+    public static function getCount(array $locator = [], array $join = [], string $group = '')
     {
-        $query = self::setComplexQuery($aLocator, [], $aJoin, [], $group);
+        $query = self::setComplexQuery($locator, [], $join, [], $group);
         return $query->count();
     }
 
     /**
      * @param string|Raw $field
-     * @param array $aLocator
-     * @param array $aJoin
+     * @param array $locator
+     * @param array $join
      * @param string $group
      * @return float
      */
-    public static function getSum($field, array $aLocator = [], array $aJoin = [], string $group = '')
+    public static function getSum($field, array $locator = [], array $join = [], string $group = '')
     {
-        $query = self::setComplexQuery($aLocator, [], $aJoin, [], $group);
+        $query = self::setComplexQuery($locator, [], $join, [], $group);
         return $query->sum($field);
     }
 
     /**
      * 设置复杂查询
-     * @param array $aLocator
-     * @param array $aField
-     * @param array $aJoin
-     * @param array $aSort
+     * @param array $locator
+     * @param array $field
+     * @param array $join
+     * @param array $sort
      * @param string $group
      * @return Query
      */
-    public static function setComplexQuery(array $aLocator = [], ?array $aField = [], array $aJoin = [], array $aSort = [], string $group = '')
+    public static function setComplexQuery(array $locator = [], ?array $field = [], array $join = [], array $sort = [], string $group = '')
     {
         // 软删除查询
         $withTrashed = false;
-        if (isset($aLocator['{withTrashed}'])) {
-            $withTrashed = boolval($aLocator['{withTrashed}']);
-            unset($aLocator['{withTrashed}']);
+        if (isset($locator['{withTrashed}'])) {
+            $withTrashed = boolval($locator['{withTrashed}']);
+            unset($locator['{withTrashed}']);
         }
         // 查询范围
         $withoutGlobalScope = null;
-        if (isset($aLocator['{withoutGlobalScope}'])) {
-            $withoutGlobalScope = $aLocator['{withoutGlobalScope}'];
-            unset($aLocator['{withoutGlobalScope}']);
+        if (isset($locator['{withoutGlobalScope}'])) {
+            $withoutGlobalScope = $locator['{withoutGlobalScope}'];
+            unset($locator['{withoutGlobalScope}']);
         }
-        // 字段查询
-        if (is_null($aField)) {
-            $aField = [];
-        } elseif (empty($aField)) {
-            $aField = static::getTableFields();
-        }
+
         $whereGroup = [];
         $hasWhereGroup = [];
         $whereOrGroup = [];
-        self::optimizeCondition($aLocator, $whereGroup, $hasWhereGroup, $whereOrGroup);
-        $with = self::extractWith($aJoin);
-        $withCount = self::extractWithCount($aJoin);
-        $append = self::extractAppend($aField);
-        $visible = self::extractVisible($aField);
-        $hidden = self::extractHidden($aField);
+        self::optimizeCondition($locator, $whereGroup, $hasWhereGroup, $whereOrGroup);
+
+        // 提取with
+        $with = self::extractWith($join);
+        $withCount = self::extractWithCount($join);
+
+        // 字段查询
+        $append = [];
+        $visible = [];
+        $hidden = [];
+        if (is_null($field)) {
+            $field = [];
+        } elseif (empty($field)) {
+            $field = static::getTableFields();
+        } else {
+            $append = self::extractAppend($field);
+            $visible = self::extractVisible($field);
+            $hidden = self::extractHidden($field);
+            if (empty($field)) {
+                $field = static::getTableFields();
+            }
+        }
+
         // start
         /** @var Query $query */
         $query = null;
@@ -94,14 +106,14 @@ trait ModelTrait
         // has where
         if ($hasWhereGroup) {
             $mainModelFields = [];
-            foreach ($aField as $i => $field) {
+            foreach ($field as $i => $field) {
                 if (is_string($i)) {
                     $fieldAlias = $field;
                     $field = $i;
                 }
                 if (false === strpos($field, '.')) {
                     array_push($mainModelFields, (!empty($fieldAlias) ? $field . ' AS ' . $fieldAlias : $field));
-                    unset($aField[$i]);
+                    unset($field[$i]);
                 }
             }
             $hasWhereField = $mainModelFields ? implode(',', $mainModelFields) : '';
@@ -123,14 +135,14 @@ trait ModelTrait
         } else {
             $query = (new static())->db();
         }
-        if (empty($alias) && !empty($aJoin)) {
+        if (empty($alias) && !empty($join)) {
             $alias = $query->getTable();
             $query->alias($query->getTable());
         }
         // concatenate alias
         self::mainModelConditionWithAlias($whereGroup, $alias);
         self::mainModelConditionWithAlias($whereOrGroup, $alias);
-        self::fieldWithAlias($aField, $alias);
+        self::fieldWithAlias($field, $alias);
         $whereGroup = empty($whereGroup) ? true : $whereGroup;
         $query->where($whereGroup);
         // where or
@@ -142,12 +154,12 @@ trait ModelTrait
             }
         }
         // sort
-        if (!empty($aSort)) {
+        if (!empty($sort)) {
             $aNewSort = [];
-            foreach ($aSort as $sortField => $sortValue) {
+            foreach ($sort as $sortField => $sortValue) {
                 $aNewSort[self::concatenateAlias($sortField, $alias)] = $sortValue;
             }
-            $aSort = $aNewSort;
+            $sort = $aNewSort;
         }
         // group
         if (!empty($group)) {
@@ -155,15 +167,15 @@ trait ModelTrait
         }
         // join
         // [['模型类','别名'],['关联键名'=>'外键'],'LEFT|INNER|RIGHT',['查询字段']]
-        foreach ($aJoin as $aItem) {
+        foreach ($join as $aItem) {
             // join table
             if (is_array($aItem[0])) {
-                $aJoinModelInfo = $aItem[0];
+                $joinModelInfo = $aItem[0];
                 /** @var Model $oJoinModel */
-                $oJoinModel = new $aJoinModelInfo[0];
-                if (!empty($aJoinModelInfo[1])) {
-                    $joinName = $aJoinModelInfo[1];
-                    $join = [$oJoinModel->getTable() => $aJoinModelInfo[1]];
+                $oJoinModel = new $joinModelInfo[0];
+                if (!empty($joinModelInfo[1])) {
+                    $joinName = $joinModelInfo[1];
+                    $join = [$oJoinModel->getTable() => $joinModelInfo[1]];
                 } else {
                     $join = $joinName = $oJoinModel->getTable();
                 }
@@ -188,31 +200,33 @@ trait ModelTrait
             $aGetJoinFields = $aItem[3] ?? [];
             if (!empty($aGetJoinFields)) {
                 self::fieldWithAlias($aGetJoinFields, $joinName);
-                $aField = array_merge($aField, $aGetJoinFields);
+                $field = array_merge($field, $aGetJoinFields);
             }
         }
-        $query->field($aField)->order($aSort)->with($with)->withCount($withCount)->append($append)->visible($visible)->hidden($hidden);
+
+        $query->field($field)->order($sort)->with($with)->withCount($withCount)->append($append)->visible($visible)->hidden($hidden);
+
         return $query;
     }
 
     /**
      * 整理为TP ORM支持的数组where条件
-     * @param array $aLocator
+     * @param array $locator
      * @param array $whereGroup
      * @param array $hasWhereGroup
      * @param array $whereOrGroup
      */
-    private static function optimizeCondition(array $aLocator, array &$whereGroup, array &$hasWhereGroup = [], array &$whereOrGroup = [])
+    private static function optimizeCondition(array $locator, array &$whereGroup, array &$hasWhereGroup = [], array &$whereOrGroup = [])
     {
-        if (empty($aLocator)) {
+        if (empty($locator)) {
             return;
         }
-        self::parseWhereItemWithStringKey($aLocator);
+        self::parseWhereItemWithStringKey($locator);
         $where = [];
-        if (self::existLogicKey($aLocator)) {
-            self::dealAndPushLogic($aLocator, $whereOrGroup);
+        if (self::existLogicKey($locator)) {
+            self::dealAndPushLogic($locator, $whereOrGroup);
         } else {
-            foreach ($aLocator as $key => $value) {
+            foreach ($locator as $key => $value) {
                 if (is_numeric($key)) {
                     if (!is_array($value)) {
                         continue;
@@ -256,9 +270,9 @@ trait ModelTrait
         }
     }
 
-    private static function parseWhereItemWithStringKey(array &$aLocator)
+    private static function parseWhereItemWithStringKey(array &$locator)
     {
-        foreach ($aLocator as $key => $value) {
+        foreach ($locator as $key => $value) {
             if (!is_string($key) || self::isLogicKey($key) || self::isHasWhereKey($key)) {
                 continue;
             }
@@ -270,15 +284,15 @@ trait ModelTrait
                         array_unshift($item, $key);
                         array_push($whereGroup, $item);
                     }
-                    array_push($aLocator, $whereGroup);
+                    array_push($locator, $whereGroup);
                 } else {
                     array_unshift($value, $key);
-                    array_push($aLocator, $value);
+                    array_push($locator, $value);
                 }
             } else {
-                array_push($aLocator, [$key, '=', $value]);
+                array_push($locator, [$key, '=', $value]);
             }
-            unset($aLocator[$key]);
+            unset($locator[$key]);
         }
     }
 
@@ -305,24 +319,24 @@ trait ModelTrait
 
     /**
      * 提取模型关联字段配置
-     * @param array $aJoin
+     * @param array $join
      * @return array
      */
-    private static function extractWith(array &$aJoin)
+    private static function extractWith(array &$join)
     {
         $aWith = [];
-        if (empty($aJoin)) {
+        if (empty($join)) {
             return $aWith;
         }
-        foreach ($aJoin as $withKey => $withConf) {
+        foreach ($join as $withKey => $withConf) {
             if (false !== strpos($withKey, '{with}.')) {
                 list($identify, $relation) = explode('.', $withKey);
                 $aWith[$relation] = self::setWith($withConf);
-                unset($aJoin[$withKey]);
+                unset($join[$withKey]);
             }
         }
-        $data = $aJoin['{with}'] ?? [];
-        unset($aJoin['{with}']);
+        $data = $join['{with}'] ?? [];
+        unset($join['{with}']);
         if (!is_array($data)) {
             array_push($aWith, $data);
         } else {
@@ -339,16 +353,16 @@ trait ModelTrait
 
     private static function setWith(array $config)
     {
-        $aField = $config['field'] ?? [];
-        $aAppend = self::extractAppend($aField);
-        $aVisible = self::extractVisible($aField);
-        $aHidden = self::extractHidden($aField);
-        $aJoin = $config['join'] ?? [];
+        $field = $config['field'] ?? [];
+        $aAppend = self::extractAppend($field);
+        $aVisible = self::extractVisible($field);
+        $aHidden = self::extractHidden($field);
+        $join = $config['join'] ?? [];
         $aBind = $config['bind'] ?? [];
-        $aWith = self::extractWith($aJoin);
-        return function ($query) use ($aField, $aBind, $aWith, $aAppend, $aVisible, $aHidden) {
-            $aField = empty($aField) ? true : $aField;
-            $query->field($aField)
+        $aWith = self::extractWith($join);
+        return function ($query) use ($field, $aBind, $aWith, $aAppend, $aVisible, $aHidden) {
+            $field = empty($field) ? true : $field;
+            $query->field($field)
                 ->with($aWith)
                 ->append($aAppend)
                 ->visible($aVisible)
@@ -357,51 +371,51 @@ trait ModelTrait
         };
     }
 
-    private static function extractWithCount(array &$aJoin)
+    private static function extractWithCount(array &$join)
     {
-        $data = $aJoin['{withCount}'] ?? [];
-        unset($aJoin['{withCount}']);
+        $data = $join['{withCount}'] ?? [];
+        unset($join['{withCount}']);
         return $data;
     }
 
     /**
-     * @param array $aField
+     * @param array $field
      * @return array
      */
-    private static function extractAppend(array &$aField)
+    private static function extractAppend(array &$field)
     {
         $aAppend = [];
-        if (!empty($aField['{append}'])) {
-            $aAppend = $aField['{append}'];
-            unset($aField['{append}']);
+        if (!empty($field['{append}'])) {
+            $aAppend = $field['{append}'];
+            unset($field['{append}']);
         }
         return $aAppend;
     }
 
     /**
-     * @param array $aField
+     * @param array $field
      * @return array
      */
-    private static function extractVisible(array &$aField)
+    private static function extractVisible(array &$field)
     {
         $visible = [];
-        if (!empty($aField['{visible}'])) {
-            $visible = $aField['{visible}'];
-            unset($aField['{visible}']);
+        if (!empty($field['{visible}'])) {
+            $visible = $field['{visible}'];
+            unset($field['{visible}']);
         }
         return $visible;
     }
 
     /**
-     * @param array $aField
+     * @param array $field
      * @return array
      */
-    private static function extractHidden(array &$aField)
+    private static function extractHidden(array &$field)
     {
         $hidden = [];
-        if (!empty($aField['{hidden}'])) {
-            $hidden = $aField['{hidden}'];
-            unset($aField['{hidden}']);
+        if (!empty($field['{hidden}'])) {
+            $hidden = $field['{hidden}'];
+            unset($field['{hidden}']);
         }
         return $hidden;
     }
@@ -501,28 +515,28 @@ trait ModelTrait
     /**
      * 获取一条数据
      * @param mixed $condition ID或者一组条件
-     * @param array $aField 查询字段
-     * @param array $aJoin 关联查询
+     * @param array $field 查询字段
+     * @param array $join 关联查询
      * @return self
      * @throws DbException
      */
-    public static function get($condition = '', array $aField = [], array $aJoin = [])
+    public static function get($condition = '', array $field = [], array $join = [])
     {
         if (empty($condition)) {
-            $aLocator = [];
+            $locator = [];
         } elseif (is_array($condition)) {
-            $aLocator = $condition;
+            $locator = $condition;
         } elseif (is_string($condition) || is_int($condition)) {
             $pk = self::getPrimaryKey();
             if (is_string($pk)) {
-                $aLocator[$pk] = $condition;
+                $locator[$pk] = $condition;
             } else {
                 throw new DbException('模型包含多个主键:' . implode(',', $pk));
             }
         } else {
-            $aLocator = [];
+            $locator = [];
         }
-        $query = self::setComplexQuery($aLocator, $aField, $aJoin);
+        $query = self::setComplexQuery($locator, $field, $join);
         return $query->findOrEmpty();
     }
 
@@ -554,33 +568,33 @@ trait ModelTrait
 
     /**
      * 根据字段获取数据
-     * @param string|array $field
-     * @param string|array $fieldValue
-     * @param array $aField
-     * @param array $aJoin
+     * @param string|array $key
+     * @param string|array $value
+     * @param array $field
+     * @param array $join
      * @return self
      * @throws DbException
      */
-    public static function getByField($field, $fieldValue, array $aField = [], array $aJoin = [])
+    public static function getByField($key, $value, array $field = [], array $join = [])
     {
-        if (is_array($field) && is_array($fieldValue)) {
-            $aLocator = array_combine($field, $fieldValue);
+        if (is_array($key) && is_array($value)) {
+            $locator = array_combine($key, $value);
         } else {
-            $aLocator = [$field => $fieldValue];
+            $locator = [$key => $value];
         }
-        return self::get($aLocator, $aField, $aJoin);
+        return self::get($locator, $field, $join);
     }
 
     /**
      * 更新数据
      * @param array $aUpdateData
-     * @param array $aLocator
+     * @param array $locator
      * @return static
      */
-    public static function updateByLocator(array $aUpdateData, array $aLocator)
+    public static function updateByLocator(array $aUpdateData, array $locator)
     {
         $where = [];
-        self::optimizeCondition($aLocator, $where);
+        self::optimizeCondition($locator, $where);
         return self::update($aUpdateData, $where);
     }
 
@@ -599,16 +613,16 @@ trait ModelTrait
     }
 
     /**
-     * @param array $aLocator
-     * @param array $aField
-     * @param array $aJoin
-     * @param array $aSort
+     * @param array $locator
+     * @param array $field
+     * @param array $join
+     * @param array $sort
      * @return self
      * @throws DbException
      */
-    public static function getOne(array $aLocator = [], array $aField = [], array $aJoin = [], array $aSort = [], string $group = '')
+    public static function getOne(array $locator = [], array $field = [], array $join = [], array $sort = [], string $group = '')
     {
-        $list = self::getList($aLocator, $aField, $aJoin, $aSort, 1, $group);
+        $list = self::getList($locator, $field, $join, $sort, 1, $group);
         if ($list->isEmpty()) {
             return $list;
         }
@@ -663,14 +677,14 @@ trait ModelTrait
 
     /**
      * 删除数据
-     * @param array $aLocator
+     * @param array $locator
      * @return bool
      * @throws DbException
      */
-    public static function deleteByLocator(array $aLocator = [])
+    public static function deleteByLocator(array $locator = [])
     {
         $whereGroup = [];
-        self::optimizeCondition($aLocator, $whereGroup);
+        self::optimizeCondition($locator, $whereGroup);
         if (empty($whereGroup)) {
             throw new DbException('删除条件不能为空');
         }
@@ -688,11 +702,11 @@ trait ModelTrait
      */
     public static function deleteByField(string $field, $value)
     {
-        $aLocator = [
+        $locator = [
             $field => $value,
         ];
         $whereGroup = [];
-        self::optimizeCondition($aLocator, $whereGroup);
+        self::optimizeCondition($locator, $whereGroup);
         if (empty($whereGroup)) {
             throw new DbException('删除条件不能为空');
         }
