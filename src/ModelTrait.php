@@ -106,13 +106,13 @@ trait ModelTrait
         // has where
         if ($hasWhereGroup) {
             $mainModelFields = [];
-            foreach ($field as $i => $field) {
+            foreach ($field as $i => $fieldItem) {
                 if (is_string($i)) {
-                    $fieldAlias = $field;
-                    $field = $i;
+                    $fieldAlias = $fieldItem;
+                    $fieldItem = $i;
                 }
-                if (false === strpos($field, '.')) {
-                    array_push($mainModelFields, (!empty($fieldAlias) ? $field . ' AS ' . $fieldAlias : $field));
+                if (false === strpos($fieldItem, '.')) {
+                    array_push($mainModelFields, (!empty($fieldAlias) ? $fieldItem . ' AS ' . $fieldAlias : $fieldItem));
                     unset($field[$i]);
                 }
             }
