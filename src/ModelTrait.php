@@ -624,7 +624,7 @@ trait ModelTrait
     {
         $list = self::getList($locator, $field, $join, $sort, 1, $group);
         if ($list->isEmpty()) {
-            return $list;
+            return new static();
         }
         return $list[0];
     }
