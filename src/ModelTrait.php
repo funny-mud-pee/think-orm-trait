@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 namespace funnymudpee\thinkphp;
 
@@ -27,19 +28,6 @@ trait ModelTrait
     {
         $query = self::setComplexQuery($locator, [], $join, [], $group);
         return $query->count();
-    }
-
-    /**
-     * @param string|Raw $field
-     * @param array $locator
-     * @param array $join
-     * @param string $group
-     * @return float
-     */
-    public static function getSum($field, array $locator = [], array $join = [], string $group = '')
-    {
-        $query = self::setComplexQuery($locator, [], $join, [], $group);
-        return $query->sum($field);
     }
 
     /**
@@ -169,37 +157,24 @@ trait ModelTrait
         // [['模型类','别名'],['关联键名'=>'外键'],'LEFT|INNER|RIGHT',['查询字段']]
         foreach ($join as $aItem) {
             // join table
-            if (is_array($aItem[0])) {
-                $joinModelInfo = $aItem[0];
-                /** @var Model $oJoinModel */
-                $oJoinModel = new $joinModelInfo[0];
-                if (!empty($joinModelInfo[1])) {
-                    $joinName = $joinModelInfo[1];
-                    $join = [$oJoinModel->getTable() => $joinModelInfo[1]];
-                } else {
-                    $join = $joinName = $oJoinModel->getTable();
-                }
-            } else {
-                /** @var Model $oJoinModel */
-                $oJoinModel = new $aItem[0];
-                $join = $joinName = $oJoinModel->getTable();
-            }
+            [$tpJoinExpression, $joinAlias] = self::resolveJoin($aItem);
+
             // condition
             $condition = '';
             foreach ($aItem[1] as $localKey => $foreignKey) {
                 if (is_string($foreignKey) && !is_numeric($foreignKey) && false === strpos($foreignKey, '.')) {
                     $foreignKey = self::concatenateAlias($foreignKey, $alias);
                 }
-                $condition .= self::concatenateAlias($localKey, $joinName) . ' = ' . $foreignKey . ' AND ';
+                $condition .= self::concatenateAlias($localKey, $joinAlias) . ' = ' . $foreignKey . ' AND ';
             }
             $condition = trim($condition, ' AND ');
             // join type
             $joinType = $aItem[2] ?? 'INNER';
-            $query->join($join, $condition, $joinType);
+            $query->join($tpJoinExpression, $condition, $joinType);
             // join model fields
             $aGetJoinFields = $aItem[3] ?? [];
             if (!empty($aGetJoinFields)) {
-                self::fieldWithAlias($aGetJoinFields, $joinName);
+                self::fieldWithAlias($aGetJoinFields, $joinAlias);
                 $field = array_merge($field, $aGetJoinFields);
             }
         }
@@ -238,7 +213,7 @@ trait ModelTrait
                         array_push($where, $value);
                     }
                 } elseif (self::isHasWhereKey($key)) {
-                    list($identify, $relation) = explode('.', $key);
+                    [$identify, $relation] = explode('.', $key);
                     $hasWhere = [];
                     self::optimizeCondition($value, $hasWhere);
                     if (1 === count($hasWhere) && isset($hasWhere[0]) && is_array($hasWhere[0][0])) {
@@ -253,20 +228,6 @@ trait ModelTrait
         }
         if (!empty($where)) {
             array_push($whereGroup, $where);
-        }
-    }
-
-    private static function dealAndPushLogic(array $logicGroup, array &$whereOrGroup = [])
-    {
-        $logic = $logicGroup['{logic}'] ?? null;
-        unset($logicGroup['{logic}']);
-        if (!empty($logicGroup)) {
-            switch ($logic) {
-                case 'OR':
-                    //$whereOrGroup = array_merge($whereOrGroup, $subWhereGroup);
-                    array_push($whereOrGroup, $logicGroup);
-                    break;
-            }
         }
     }
 
@@ -304,17 +265,31 @@ trait ModelTrait
         return false;
     }
 
-    private static function existLogicKey(array $data)
-    {
-        return array_key_exists('{logic}', $data);
-    }
-
     private static function isHasWhereKey(string $key)
     {
         if ('{has}' === $key || false !== strpos($key, '{has}.')) {
             return true;
         }
         return false;
+    }
+
+    private static function existLogicKey(array $data)
+    {
+        return array_key_exists('{logic}', $data);
+    }
+
+    private static function dealAndPushLogic(array $logicGroup, array &$whereOrGroup = [])
+    {
+        $logic = $logicGroup['{logic}'] ?? null;
+        unset($logicGroup['{logic}']);
+        if (!empty($logicGroup)) {
+            switch ($logic) {
+                case 'OR':
+                    //$whereOrGroup = array_merge($whereOrGroup, $subWhereGroup);
+                    array_push($whereOrGroup, $logicGroup);
+                    break;
+            }
+        }
     }
 
     /**
@@ -329,8 +304,8 @@ trait ModelTrait
             return $aWith;
         }
         foreach ($join as $withKey => $withConf) {
-            if (false !== strpos($withKey, '{with}.')) {
-                list($identify, $relation) = explode('.', $withKey);
+            if (is_string($withKey) && false !== strpos($withKey, '{with}.')) {
+                [$identify, $relation] = explode('.', $withKey);
                 $aWith[$relation] = self::setWith($withConf);
                 unset($join[$withKey]);
             }
@@ -369,13 +344,6 @@ trait ModelTrait
                 ->hidden($aHidden)
                 ->bind($aBind);
         };
-    }
-
-    private static function extractWithCount(array &$join)
-    {
-        $data = $join['{withCount}'] ?? [];
-        unset($join['{withCount}']);
-        return $data;
     }
 
     /**
@@ -420,6 +388,13 @@ trait ModelTrait
         return $hidden;
     }
 
+    private static function extractWithCount(array &$join)
+    {
+        $data = $join['{withCount}'] ?? [];
+        unset($join['{withCount}']);
+        return $data;
+    }
+
     /**
      * 整理为TP ORM支持的数组where条件
      * @param array $where
@@ -451,6 +426,15 @@ trait ModelTrait
             }
         }
         return $field;
+    }
+
+    private static function isAggregateField(string $field)
+    {
+        $field = strtoupper($field);
+        if (0 === strpos($field, 'SUM') || 0 === strpos($field, 'COUNT') || 0 === strpos($field, 'MIN') || 0 === strpos($field, 'MAX')) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -487,13 +471,50 @@ trait ModelTrait
         $fields = $result;
     }
 
-    private static function isAggregateField(string $field)
+    private static function resolveJoin(array $input)
     {
-        $field = strtoupper($field);
-        if (0 === strpos($field, 'SUM') || 0 === strpos($field, 'COUNT') || 0 === strpos($field, 'MIN') || 0 === strpos($field, 'MAX')) {
-            return true;
+        $config = $input[0] ?? '';
+        if (is_array($config)) {
+            $modelOrSubSQL = $config[0];
+            $alias = $config[1] ?? '';
+            if (class_exists($modelOrSubSQL)) {
+                /** @var Model $oJoinModel */
+                $oJoinModel = new $modelOrSubSQL;
+                if (!empty($alias)) {
+                    $join = [$oJoinModel->getTable() => $alias];
+                } else {
+                    $join = $alias = $oJoinModel->getTable();
+                }
+            } else {
+                if (empty($alias)) {
+                    throw new \Exception('请设置子查询别名');
+                }
+                $join = [$modelOrSubSQL => $alias];
+            }
+
+        } elseif (class_exists($config)) {
+            /** @var Model $oJoinModel */
+            $oJoinModel = new $config;
+            $join = $alias = $oJoinModel->getTable();
+        } else {
+            // todo 分离子查询和别名  `(select id from user) AS user`
+            $join = '';
+            $alias = '';
         }
-        return false;
+        return [$join, $alias];
+    }
+
+    /**
+     * @param string|Raw $field
+     * @param array $locator
+     * @param array $join
+     * @param string $group
+     * @return float
+     */
+    public static function getSum($field, array $locator = [], array $join = [], string $group = '')
+    {
+        $query = self::setComplexQuery($locator, [], $join, [], $group);
+        return $query->sum($field);
     }
 
     /**
