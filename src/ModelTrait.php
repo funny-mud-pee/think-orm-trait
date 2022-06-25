@@ -430,6 +430,9 @@ trait ModelTrait
 
     private static function isAggregateField(string $field)
     {
+        if (false === strpos($field, '(') || false === strpos($field, ')')) {
+            return false;
+        }
         $field = strtoupper($field);
         if (0 === strpos($field, 'SUM') || 0 === strpos($field, 'COUNT') || 0 === strpos($field, 'MIN') || 0 === strpos($field, 'MAX')) {
             return true;
