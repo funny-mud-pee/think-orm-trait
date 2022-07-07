@@ -83,37 +83,8 @@ trait ModelTrait
         // start
         /** @var Query $query */
         $query = null;
-        // 软删除查询
-        if ($withTrashed && property_exists(static::class, 'withTrashed')) {
-            static::withTrashedData(true);
-        }
-        // 全局作用域的处理
-        if (!is_null($withoutGlobalScope) && is_array($withoutGlobalScope)) {
-            $query = static::withoutGlobalScope($withoutGlobalScope);
-        }
-        // has where
-        if ($hasWhereGroup) {
-            $mainModelFields = [];
-            foreach ($field as $i => $fieldItem) {
-                if (is_string($i)) {
-                    $fieldAlias = $fieldItem;
-                    $fieldItem = $i;
-                }
-                if (false === strpos($fieldItem, '.')) {
-                    array_push($mainModelFields, (!empty($fieldAlias) ? $fieldItem . ' AS ' . $fieldAlias : $fieldItem));
-                    unset($field[$i]);
-                }
-            }
-            $hasWhereField = $mainModelFields ? implode(',', $mainModelFields) : '';
-            foreach ($hasWhereGroup as $aHasWhereItem) {
-                if (!is_null($query)) {
-                    $query->hasWhere($aHasWhereItem['relation'], $aHasWhereItem['where']);
-                } else {
-                    $query = static::hasWhere($aHasWhereItem['relation'], $aHasWhereItem['where'], $hasWhereField);
-                }
-            }
-        }
-        // where
+
+        // set alias
         $alias = '';
         if ($query) {
             // alias
@@ -123,16 +94,44 @@ trait ModelTrait
         } else {
             $query = (new static())->db();
         }
-        if (empty($alias) && !empty($join)) {
+        if (empty($alias) && (!empty($join) || !empty($hasWhereGroup))) {
             $alias = $query->getTable();
             $query->alias($query->getTable());
         }
+
+        // 查询字段
+        self::fieldWithAlias($field, $alias);
+
+        // 软删除查询
+        if ($withTrashed && property_exists(static::class, 'withTrashed')) {
+            static::withTrashedData(true);
+        }
+
+        // 全局作用域的处理
+        if (!is_null($withoutGlobalScope) && is_array($withoutGlobalScope)) {
+            $query = static::withoutGlobalScope($withoutGlobalScope);
+        }
+
+        // has where
+        if ($hasWhereGroup) {
+            // 在这里传入字段,不然tp orm内部会默认处理为 tableName.*查询所有字段,导致field失效
+            $toHasWhereFiled = implode(',', $field);
+            foreach ($hasWhereGroup as $aHasWhereItem) {
+                if (!is_null($query)) {
+                    $query->hasWhere($aHasWhereItem['relation'], $aHasWhereItem['where'], $toHasWhereFiled);
+                } else {
+                    $query = static::hasWhere($aHasWhereItem['relation'], $aHasWhereItem['where'], $toHasWhereFiled);
+                }
+            }
+        }
+
+        // where
         // concatenate alias
         self::mainModelConditionWithAlias($whereGroup, $alias);
         self::mainModelConditionWithAlias($whereOrGroup, $alias);
-        self::fieldWithAlias($field, $alias);
         $whereGroup = empty($whereGroup) ? true : $whereGroup;
         $query->where($whereGroup);
+
         // where or
         if (!empty($whereOrGroup)) {
             foreach ($whereOrGroup as $whereOr) {
@@ -141,6 +140,7 @@ trait ModelTrait
                 });
             }
         }
+
         // sort
         if (!empty($sort)) {
             $aNewSort = [];
@@ -149,10 +149,12 @@ trait ModelTrait
             }
             $sort = $aNewSort;
         }
+
         // group
         if (!empty($group)) {
             $query->group(self::concatenateAlias($group, $alias));
         }
+
         // join
         // [['模型类','别名'],['关联键名'=>'外键'],'LEFT|INNER|RIGHT',['查询字段']]
         foreach ($join as $aItem) {
@@ -397,21 +399,25 @@ trait ModelTrait
 
     /**
      * 整理为TP ORM支持的数组where条件
-     * @param array $where
+     * @param array $fields
      * @param string $alias
      */
-    private static function mainModelConditionWithAlias(array &$where, string $alias)
+    private static function fieldWithAlias(array &$fields, string $alias)
     {
-        if (empty($where) || empty($alias)) {
+        if (empty($fields) || empty($alias)) {
             return;
         }
-        foreach ($where as &$item) {
-            if (is_array($item[0])) {
-                self::mainModelConditionWithAlias($item, $alias);
+        $result = [];
+        foreach ($fields as $i => $field) {
+            if (is_string($i)) {
+                $fieldAlias = $field;
+                $field = $i;
+                $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
             } else {
-                $item[0] = self::concatenateAlias($item[0], $alias);
+                $result[$i] = self::concatenateAlias($field, $alias);
             }
         }
+        $fields = $result;
     }
 
     private static function concatenateAlias(string $field, ?string $alias)
@@ -442,36 +448,21 @@ trait ModelTrait
 
     /**
      * 整理为TP ORM支持的数组where条件
-     * @param array $fields
+     * @param array $where
      * @param string $alias
      */
-    private static function fieldWithAlias(array &$fields, string $alias)
+    private static function mainModelConditionWithAlias(array &$where, string $alias)
     {
-        if (empty($fields) || empty($alias)) {
+        if (empty($where) || empty($alias)) {
             return;
         }
-        $result = [];
-        foreach ($fields as $i => $field) {
-            if (is_string($i)) {
-//                if (self::isAggregateField($i)) {
-//                    // SUM('id')
-//                    $leftParenthesesPosition = strpos($i, '(');
-//                    [$left, $right] = explode('(', $i);
-//                    $i = $left . '(' . $alias . '.' . $right;
-//                    $result[$i] = $field;
-//                } else {
-//                    $fieldAlias = $field;
-//                    $field = $i;
-//                    $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
-//                }
-                $fieldAlias = $field;
-                $field = $i;
-                $result[self::concatenateAlias($field, $alias)] = $fieldAlias;
+        foreach ($where as &$item) {
+            if (is_array($item[0])) {
+                self::mainModelConditionWithAlias($item, $alias);
             } else {
-                $result[$i] = self::concatenateAlias($field, $alias);
+                $item[0] = self::concatenateAlias($item[0], $alias);
             }
         }
-        $fields = $result;
     }
 
     private static function resolveJoin(array $input)
