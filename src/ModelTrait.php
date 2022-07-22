@@ -18,6 +18,8 @@ use think\model\concern\SoftDelete;
  */
 trait ModelTrait
 {
+    private static ?Query $q = null;
+
     /**
      * @param array $locator
      * @param array $join
@@ -81,22 +83,13 @@ trait ModelTrait
         }
 
         // start
-        /** @var Query $query */
-        $query = null;
+        $query = self::query();
 
-        // set alias
-        $alias = '';
-        if ($query) {
-            // alias
-            $alias = $query->getOptions('alias');
-            $table = $query->getTable();
-            $alias = isset($alias[$table]) ? $alias[$table] : '';
-        } else {
-            $query = (new static())->db();
-        }
-        if (empty($alias) && (!empty($join) || !empty($hasWhereGroup))) {
+        if (!empty($join) || !empty($hasWhereGroup)) {
             $alias = $query->getTable();
             $query->alias($query->getTable());
+        } else {
+            $alias = '';
         }
 
         // 查询字段
@@ -108,20 +101,17 @@ trait ModelTrait
         }
 
         // 全局作用域的处理
-        if (!is_null($withoutGlobalScope) && is_array($withoutGlobalScope)) {
-            $query = static::withoutGlobalScope($withoutGlobalScope);
-        }
+//        if (!is_null($withoutGlobalScope) && is_array($withoutGlobalScope)) {
+//            $query = static::withoutGlobalScope($withoutGlobalScope);
+//        }
 
         // has where
         if ($hasWhereGroup) {
-            // 在这里传入字段,不然tp orm内部会默认处理为 tableName.*查询所有字段,导致field失效
-            $toHasWhereFiled = implode(',', $field);
+            // TODO 在这里传入字段,不然tp orm内部会默认处理为 tableName.*查询所有字段,导致field失效
+            //$toHasWhereFiled = implode(',', $field);
+            //dump($field,$toHasWhereFiled);
             foreach ($hasWhereGroup as $aHasWhereItem) {
-                if (!is_null($query)) {
-                    $query->hasWhere($aHasWhereItem['relation'], $aHasWhereItem['where'], $toHasWhereFiled);
-                } else {
-                    $query = static::hasWhere($aHasWhereItem['relation'], $aHasWhereItem['where'], $toHasWhereFiled);
-                }
+                $query->hasWhere($aHasWhereItem['relation'], $aHasWhereItem['where']);
             }
         }
 
@@ -395,6 +385,14 @@ trait ModelTrait
         $data = $join['{withCount}'] ?? [];
         unset($join['{withCount}']);
         return $data;
+    }
+
+    public static function query()
+    {
+        if (is_null(self::$q)) {
+            self::$q = (new static())->db();
+        }
+        return self::$q;
     }
 
     /**
