@@ -18,8 +18,6 @@ use think\model\concern\SoftDelete;
  */
 trait ModelTrait
 {
-    private static ?Query $q = null;
-
     /**
      * @param array $locator
      * @param array $join
@@ -389,10 +387,7 @@ trait ModelTrait
 
     public static function query()
     {
-        if (is_null(self::$q)) {
-            self::$q = (new static())->db();
-        }
-        return self::$q;
+        return (new static())->db();
     }
 
     /**
