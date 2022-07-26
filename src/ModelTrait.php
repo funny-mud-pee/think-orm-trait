@@ -84,8 +84,9 @@ trait ModelTrait
         $query = self::query();
 
         if (!empty($join) || !empty($hasWhereGroup)) {
-            $alias = $query->getTable();
-            $query->alias($query->getTable());
+            //$alias = $query->getTable();
+            $alias = $query->getModel()->getName();
+            $query->alias($alias);
         } else {
             $alias = '';
         }
