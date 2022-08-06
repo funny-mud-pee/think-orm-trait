@@ -668,19 +668,24 @@ trait ModelTrait
      */
     public static function getPage(array $where = [], ?array $field = [], array $join = [], array $sort = [], int $listRows = 0, string $group = '')
     {
-        $aConf = null;
-        if ($submitListRows = request()->param('list_rows', 10, 'intval')) {
+        $submitListRows = request()->param('list_rows', 0, 'intval');
+        if ($submitListRows) {
             $aConf['list_rows'] = $submitListRows;
         } elseif ($listRows) {
             $aConf['list_rows'] = $listRows;
+        } else {
+            $aConf = null;
         }
+
         $query = self::setComplexQuery($where, $field, $join, $sort, $group);
         // query
         $oPaginate = $query->paginate($aConf);
         $result = $oPaginate->toArray();
+
         return [
             'list' => $result['data'],
             'total_pages' => $result['last_page'],
+            'total_rows' => $result['total'],
         ];
     }
 
